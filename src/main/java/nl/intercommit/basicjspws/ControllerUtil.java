@@ -240,18 +240,10 @@ public class ControllerUtil {
 		return getSession(request).getServletContext();
 	}
 	
-	public static UrlControllers getUrlControllers() {
-		return AppInit.appInstance.urlControllers;
-	}
-
 	public static Properties getAppProps() {
 		return AppInit.appInstance.appProps;
 	}
 	
-	public static String getAppPage(final String pageName) {
-		return getUrlControllers().getJspPage(pageName);
-	}
-
 	public static String getDefaultEncoding() {
 		return AppInit.appInstance.defaultEncoding;
 	}

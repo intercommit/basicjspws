@@ -21,7 +21,6 @@ package nl.intercommit.basicjspws;
 import java.nio.charset.Charset;
 import java.util.Properties;
 
-import javax.servlet.ServletContext;
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 
@@ -53,8 +52,11 @@ public abstract class AppInit implements ServletContextListener {
 	
 	/** The name if the application as it should be displayed on Web-pages. */
 	public String appName;
-	/** The first part in the URL referring to this application (e.g. localhost:8080/baseName/) */
+	/** The name of the first part in the URL referring to this application (e.g. localhost:8080/baseName/) */
 	public String baseName;
+	/** The the first part in the URL referring to this application
+	 * surrounded by forward slashes  (e.g. localhost:8080&lt;baseUrl&gt;). */
+	public String baseUrl;
 	/** Properties loaded during startup. */
 	public Properties appProps;
 	/** The home-directory of this application (usually home-directory of Tomcat). */
@@ -63,12 +65,6 @@ public abstract class AppInit implements ServletContextListener {
 	public AppStats appStats;
 	/** The default encoding used to send responses. Used by {@link ControllerUtil}. */
 	public String defaultEncoding;
-	/** 
-	 * Controllers used to handle requests. Used by the {@link AppServlet} to lookup controllers
-	 * that should handle a request (looked up via {@link UrlController#requestUrl}
-	 * and to lookup jsp-page files (the {@link UrlController#jspFileName} found using the {@link UrlController#name} as key).
-	 */
-	public UrlControllers urlControllers;
 
 	/** The app-name is used in jsp-pages to show the name of this application. Stored in ServletContext as appName. */
 	protected abstract String getAppName();
@@ -91,42 +87,6 @@ public abstract class AppInit implements ServletContextListener {
 	protected abstract void initApp(final ServletContextEvent sce);
 
 	/**
-	 * Initializes {@link #urlControllers} and adds all UrlControllers related to the static Strings in {@link UrlController}
-	 * (e.g. {@link UrlController#INDEX_PAGE}). 
-	 * @param baseUrl e.g. "/baseName/" (always ends and starts with a /), registered as urlController using {@link UrlController#BASE_URL}. 
-	 */
-	protected void setUrlControllers(final String baseUrl) {
-		
-		urlControllers = new UrlControllers();
-		urlControllers.add(new UrlController(UrlController.BASE_URL, baseUrl, null, null));
-		urlControllers.add(new UrlController(UrlController.IMAGES_URL, baseUrl + "images", null, null));
-		urlControllers.add(new UrlController(UrlController.INDEX_PAGE, baseUrl + "pages/index", null, "/WEB-INF/pages/index.jsp"));
-		urlControllers.add(new UrlController(UrlController.STATS_PAGE, baseUrl + "pages/stats", null, "/WEB-INF/pages/stats.jsp"));
-		urlControllers.add(new UrlController(UrlController.SYSENV_PAGE, baseUrl + "pages/sysenv", null, "/WEB-INF/pages/sysenv.jsp"));
-		urlControllers.add(new UrlController(UrlController.LOG_PAGE, baseUrl + "pages/log", null, "/WEB-INF/pages/log.jsp"));
-		urlControllers.add(new UrlController(UrlController.LOG_ERROR_PAGE, baseUrl + "pages/logerror", null, "/WEB-INF/pages/log.jsp"));
-		urlControllers.add(new UrlController(UrlController.LOG_STATUS_PAGE, baseUrl + "pages/logstatus", null, null));
-	}
-	
-	/** 
-	 * For all urlControllers (see {@link #setUrlControllers(String)}) that have a name ending with "Url", register
-	 * the requestUrl as an attribute in sce's ServletContext using the {@link UrlController#name}
-	 * as key.
-	 */
-	protected void registerRequestUrlsInServletContext(final ServletContextEvent sce) {
-		
-		ServletContext sc = sce.getServletContext();
-		int count = 0;
-		for(UrlController uc : urlControllers.ucs.values()) {
-			if (uc.name.endsWith("Url")) {
-				sc.setAttribute(uc.name, uc.requestUrl);
-				count++;
-			}
-		}
-		log.debug("Total of " + count + " urls registered as attribute.");
-	}
-
-	/**
 	 * Initializes the application:
 	 * <br> - sets {@link #appInstance}
 	 * <br> - calls {@link #setHomeDir()}
@@ -137,9 +97,7 @@ public abstract class AppInit implements ServletContextListener {
 	 * <br> - calls {@link #getAppProps(ServletContextEvent)}
 	 * <br> - calls {@link #getAppEnv()} and registers it in ServletContext via appEnv
 	 * <br> - sets {@link #defaultEncoding} (default UTF-8) using {@link #appProps} baseName.default.encoding as key.
-	 * <br> - calls {@link #setUrlControllers(String)} (default "/baseName/") where baseUrl is constructed using  
-	 * {@link #appProps} baseName.base.url as key.
-	 * <br> - calls {@link AppInit#registerRequestUrlsInServletContext(ServletContextEvent)}
+	 * <br> - sets {@link #baseUrl} (default "/baseName/") where baseUrl is constructed using {@link #appProps}'s baseName.base.url as key.
 	 */
 	@Override
 	public void contextInitialized(final ServletContextEvent sce) {
@@ -153,7 +111,7 @@ public abstract class AppInit implements ServletContextListener {
 		sce.getServletContext().setAttribute("appVersion", getAppVersion());
 		sce.getServletContext().setAttribute("appHomeDir", appHomeDir); 
 		LogbackUtil.initLogging(appHomeDir, baseName + "-logback.xml");
-		SysPropsUtil.logSysProps(org.slf4j.LoggerFactory.getLogger(this.getClass()), true, true);
+		SysPropsUtil.logSysProps(log, true, true);
 		appStats = new AppStats();
 		appProps = getAppProps(sce);
 		sce.getServletContext().setAttribute("appEnv", getAppEnv()); 
@@ -164,12 +122,10 @@ public abstract class AppInit implements ServletContextListener {
 			throw new RuntimeException("Invalid encoding for " + baseName + ": " + defaultEncoding, e);
 		}
 		initApp(sce);
-		String baseUrl = appProps.getProperty(baseName + ".base.url");
+		baseUrl = appProps.getProperty(baseName + ".base.url");
 		if (isEmpty(baseUrl)) baseUrl = "/" + baseName + "/";
 		if (!baseUrl.endsWith("/")) baseUrl = baseUrl + "/";
 		log.debug("Base URL set to " + baseUrl);
-		setUrlControllers(baseUrl);
-		registerRequestUrlsInServletContext(sce);
 	}
 	
 	/** Sets {@link #appHomeDir} (specified via system property -DbaseName.home or uses catalina/tomcat home directory).

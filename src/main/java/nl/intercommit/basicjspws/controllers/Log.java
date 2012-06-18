@@ -16,54 +16,59 @@
 *  along with BasicJspWs. If not, see <http://www.gnu.org/licenses/>.
 *
 */
-package nl.intercommit.basicjspws;
-
-import static nl.intercommit.basicjspws.ControllerUtil.getAppPage;
+package nl.intercommit.basicjspws.controllers;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import nl.intercommit.basicjspws.AppInit;
+import nl.intercommit.basicjspws.Controller;
+import nl.intercommit.basicjspws.LogbackUtil;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.PatternLayout;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.classic.spi.LoggingEvent;
 import ch.qos.logback.core.read.CyclicBufferAppender;
 
 /**
- * Shows log-statements from the "CYCLICERROR" log-buffer.
- * Uses {@link UrlController#LOG_ERROR_PAGE}
- * @author FWiers
- *
- */
-public class LogErrorPageController implements Controller {
+* Shows log-statements from the "CYCLIC" log-buffer.
+* @author FWiers
+*
+*/
+public class Log implements Controller {
 	
-	private static final Logger log = LoggerFactory.getLogger(LogErrorPageController.class);
+	private static final Logger log = LoggerFactory.getLogger(Log.class);
 
 	PatternLayout logLayout;
 	CyclicBufferAppender<ILoggingEvent> logBuffer;
+	
+	@Override
+	public String getName() { return "logPageUrl"; }
 
 	@Override
 	public String handleRequest(HttpServletRequest request,	HttpServletResponse response) {
 		
-		request.setAttribute(PAGE_TITLE, AppInit.appInstance.appName + " Log error");
+		request.setAttribute(PAGE_TITLE, AppInit.appInstance.appName + " Log");
 		request.setAttribute("logText", "");
-		logBuffer = LogbackUtil.getLogBuffer("CYCLICERROR");
+		logBuffer = LogbackUtil.getLogBuffer("CYCLIC");
 		if (logBuffer == null) {
-			request.setAttribute("logTextInfo", "Log error buffer is not available (please check log configuration for CYCLICERROR appender).");
+			request.setAttribute("logTextInfo", "Log buffer is not available (please check log configuration for CYCLIC appender).");
 		} else if (logBuffer.getLength() == 0) {
-			request.setAttribute("logTextInfo", "No error log events available, log buffer is empty.");
+			request.setAttribute("logTextInfo", "No log events available, log buffer is empty.");
 		} else {
 			// logLayout cannot be stored: it no longer works when the log configuration file is updated. 
 			logLayout = new PatternLayout();
 			logLayout.setContext(LogbackUtil.getLoggerContext());
-			logLayout.setPattern("%d [%thread] %-5level %logger - %msg%n");
+			logLayout.setPattern("%d{dd/MM HH:mm:ss:SSS} %-5level %logger{35} - %msg%n");
 			logLayout.start();
 
 			int maxEvents = logBuffer.getLength(); 
 			request.setAttribute("logTextInfo", logLayout.doLayout(
-					LogPageController.createLoggingEvent("Showing " + maxEvents + " log error events, last event first.")));
+					createLoggingEvent("Showing " + maxEvents + " log events, last event first.")));
 			StringBuilder sb = new StringBuilder();
 			LoggingEvent le;
 			for (int i = maxEvents-1; i >= 0; i--) {
@@ -72,10 +77,21 @@ public class LogErrorPageController implements Controller {
 				sb.append(line);
 			}
 			request.setAttribute("logText", sb.toString());
-			log.debug("Returning {} log error events as text", maxEvents);
+			log.debug("Returning {} log events as text", maxEvents);
 			logLayout.stop();
 		}
-		return getAppPage(UrlController.LOG_ERROR_PAGE);
+		return "/WEB-INF/pages/log.jsp";
 	}
 	
+	public static LoggingEvent createLoggingEvent(String msg) {
+		
+		LoggingEvent le = new LoggingEvent();
+		le.setTimeStamp(System.currentTimeMillis());
+		le.setLevel(Level.INFO);
+		le.setThreadName(Thread.currentThread().getName());
+		le.setLoggerName(Log.class.getName());
+		le.setMessage(msg);
+		return le;
+	}
+
 }

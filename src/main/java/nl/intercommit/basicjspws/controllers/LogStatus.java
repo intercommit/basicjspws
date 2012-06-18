@@ -16,12 +16,14 @@
 *  along with BasicJspWs. If not, see <http://www.gnu.org/licenses/>.
 *
 */
-package nl.intercommit.basicjspws;
+package nl.intercommit.basicjspws.controllers;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import static nl.intercommit.basicjspws.ControllerUtil.*;
+
+import nl.intercommit.basicjspws.Controller;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,13 +35,16 @@ import ch.qos.logback.classic.ViewStatusMessagesServlet;
  * @author FWiers
  *
  */
-public class LogStatusPageController implements Controller {
+public class LogStatus implements Controller {
 	
-	private static final Logger log = LoggerFactory.getLogger(LogStatusPageController.class);
+	private static final Logger log = LoggerFactory.getLogger(LogStatus.class);
 
 	ViewStatusMessagesServlet logServlet;
 	
-	public LogStatusPageController() {
+	@Override
+	public String getName() { return "logStatusPageUrl"; }
+
+	public LogStatus() {
 		super();
 		this.logServlet = new ViewStatusMessagesServlet();
 		try {

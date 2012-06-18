@@ -19,12 +19,22 @@
 package nl.intercommit.basicjspws;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.servlet.RequestDispatcher;
+import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+
+import nl.intercommit.basicjspws.controllers.Index;
+import nl.intercommit.basicjspws.controllers.LogError;
+import nl.intercommit.basicjspws.controllers.Log;
+import nl.intercommit.basicjspws.controllers.LogStatus;
+import nl.intercommit.basicjspws.controllers.Stats;
+import nl.intercommit.basicjspws.controllers.SysEnv;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,13 +42,10 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Servlet called for all pages after {@link AppFilter} has pre-processed the requests.
- * The servlet depends on servlet context variables set by {@link AppInit} to map 
- * URLs with page-controllers. The servlet also depends on the {@link AppFilter} to set 
- * the correct "requestedUrl".
- * Page-controllers can return the name of the jsp-page to display (set in {@link UrlController#jspFileName}),
- * which this servlet will handle using a RequestDispatcher.
- * <br>New controllers can be added by extending this class and overloading {@link #init()}.
- * If this is done, register the new servlet in WebContent/WEB-INF/web.xml
+ * <br>New controllers can be added by extending this class and overloading 
+ * {@link #registerRequestControllers(String)}, {@link #registerRequestUrlsInServletContextByControllerName(ServletContext)}
+ * and/or {@link #init()}.
+ * After overloading, register the new servlet class in WebContent/WEB-INF/web.xml
  * as the servlet-class for MainServlet.
  */
 public class AppServlet extends HttpServlet {
@@ -47,33 +54,88 @@ public class AppServlet extends HttpServlet {
 	
 	private static final Logger log = LoggerFactory.getLogger(AppServlet.class);
 	
+	/** All controllers related to their request-URL (used by {@link #doPost(HttpServletRequest, HttpServletResponse)}
+	 * to lookup the controller that handles the request). 
+	 */
+	protected Map<String, Controller> requestControllers = new HashMap<String, Controller>(); 
+	
+	
 	/**
-	 * Registers the controllers per UrlController.
+	 * Fills {@link #requestControllers} (request URLs with associated Controller instances).
+	 * @param baseUrl e.g. "/baseName/" (always ends and starts with a /). 
+	 */
+	protected void registerRequestControllers(final String baseUrl) {
+		
+		requestControllers.put(baseUrl, new Index());
+		requestControllers.put(baseUrl + "pages/index", new Index());
+		requestControllers.put(baseUrl + "pages/stats", new Stats());
+		requestControllers.put(baseUrl + "pages/sysenv", new SysEnv());
+		requestControllers.put(baseUrl + "pages/log", new Log());
+		requestControllers.put(baseUrl + "pages/logerror", new LogError());
+		requestControllers.put(baseUrl + "pages/logstatus", new LogStatus());
+	}
+	
+	/** 
+	 * For all {@link Controller}s that have a name ending with "Url", register
+	 * the requestUrl as an attribute in ServletContext using the {@link Controller#getName()}
+	 * as key.
+	 * Also registers "appImagesUrl" to point to the images-directory (for use in jsp-pages).
+	 */
+	protected void registerRequestUrlsInServletContextByControllerName(final ServletContext sc) {
+		
+		sc.setAttribute("appImagesUrl", AppInit.appInstance.baseUrl + "images");
+		int count = 1;
+		Map<Controller, String> reverse = getControllersByRequest();
+		for(Controller c  : requestControllers.values()) {
+			if (c.getName() != null && c.getName().endsWith("Url")) {
+				sc.setAttribute(c.getName(), reverse.get(c));
+				count++;
+			}
+		}
+		log.debug("Total of " + count + " urls registered as attribute.");
+	}
+	
+	/**
+	 * @return a reverse map of {@link #requestControllers}.
+	 */
+	protected Map<Controller, String> getControllersByRequest() {
+		
+		HashMap<Controller, String> reverse = new HashMap<Controller, String>();
+		for(String rurl : requestControllers.keySet()) {
+			if (requestControllers.get(rurl) != null) reverse.put(requestControllers.get(rurl), rurl);
+		}
+		return reverse;
+	}
+
+	/**
+	 * Calls {@link #registerRequestControllers(String)} and 
+	 * {@link #registerRequestUrlsInServletContextByControllerName(ServletContext)}.
 	 */
 	@Override
     public void init() throws ServletException {
     	
-		UrlControllers ucs = AppInit.appInstance.urlControllers;
-    	IndexController ic = new IndexController();
-		ucs.get(UrlController.BASE_URL).controller = ic;
-		ucs.get(UrlController.INDEX_PAGE).controller = ic;
-		ucs.get(UrlController.STATS_PAGE).controller = new StatsPageController();
-		ucs.get(UrlController.SYSENV_PAGE).controller = new SysEnvPageController();
-		ucs.get(UrlController.LOG_PAGE).controller = new LogPageController();
-		ucs.get(UrlController.LOG_ERROR_PAGE).controller = new LogErrorPageController();
-		ucs.get(UrlController.LOG_STATUS_PAGE).controller = new LogStatusPageController();
+		String baseUrl = AppInit.appInstance.baseUrl;
+		registerRequestControllers(baseUrl);
+		registerRequestUrlsInServletContextByControllerName(getServletContext());
     	log.debug("Servlet initialized");
     }
 
+	/** 
+	 * Calls {@link #doPost(HttpServletRequest, HttpServletResponse)}
+	 */
 	@Override
 	protected void doGet(final HttpServletRequest request, final HttpServletResponse response) throws ServletException, IOException {
 		doPost(request, response);
 	}
 
+	/**
+	 * Looks up the controller for the "requestedUrl" (set by {@link AppFilter}) and executes the found controller.
+	 * If the controller returns a non-null String, a jsp-page is displayed.
+	 */
 	@Override
 	protected void doPost(final HttpServletRequest request, final HttpServletResponse response) throws ServletException, IOException {
 		
-		Controller handler = AppInit.appInstance.urlControllers.getByRequestUrl((String)request.getAttribute("requestedUrl")); // Set by MainFilter
+		Controller handler = requestControllers.get((String)request.getAttribute("requestedUrl"));
 		if (handler == null) {
 			response.getWriter().write("Cannot find controller for URL " + request.getAttribute("requestedUrl"));
 			log.warn("No controller available for URL " + request.getAttribute("requestedUrl"));

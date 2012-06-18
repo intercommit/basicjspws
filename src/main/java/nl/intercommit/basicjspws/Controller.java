@@ -48,4 +48,12 @@ public interface Controller {
 	 * @return null (response has been handled by controller) or the jsp-page fileName to display.
 	 */
 	String handleRequest(HttpServletRequest request, HttpServletResponse response);
+
+	/** 
+	 * The name for the controller. If the name ends with "Url" the name will
+	 * be registered in ServletContext with an associated request-URL.
+	 * In this manner, the jsp-pages can use the name to refer to another jsp-page. 
+	 * @return The name for the controller.
+	 */
+	String getName();
 }

@@ -16,27 +16,32 @@
 *  along with BasicJspWs. If not, see <http://www.gnu.org/licenses/>.
 *
 */
-package nl.intercommit.basicjspws;
+package nl.intercommit.basicjspws.controllers;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import nl.intercommit.basicjspws.AppInit;
+import nl.intercommit.basicjspws.AppStats;
+import nl.intercommit.basicjspws.Controller;
+
 import static nl.intercommit.basicjspws.ControllerUtil.*;
 
 /**
- * Show the system environment using {@link SysPropsUtil}.
- * Uses {@link UrlController#SYSENV_PAGE}
+ * Shows App statistics (see {@link AppStats}).
  * @author frederikw
  *
  */
-public class SysEnvPageController implements Controller {
+public class Stats implements Controller {
+
+	@Override
+	public String getName() { return "statsPageUrl"; }
 
 	@Override
 	public String handleRequest(final HttpServletRequest request, final HttpServletResponse response) {
 		
-		request.setAttribute(PAGE_TITLE, AppInit.appInstance.appName + " system environemnt");
-		request.setAttribute("systemEnv", SysPropsUtil.getSystemEnv());
-		request.setAttribute("systemProps", SysPropsUtil.getSystemProps());
-		return getAppPage(UrlController.SYSENV_PAGE);
+		request.setAttribute(PAGE_TITLE, AppInit.appInstance.appName + " statistics");
+		request.setAttribute("appStatistics", getAppStats().getStatsDescription());
+		return "/WEB-INF/pages/stats.jsp";
 	}
 }
