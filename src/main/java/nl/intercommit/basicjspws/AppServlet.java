@@ -29,12 +29,8 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import nl.intercommit.basicjspws.controllers.Index;
-import nl.intercommit.basicjspws.controllers.LogError;
-import nl.intercommit.basicjspws.controllers.Log;
-import nl.intercommit.basicjspws.controllers.LogStatus;
-import nl.intercommit.basicjspws.controllers.Stats;
-import nl.intercommit.basicjspws.controllers.SysEnv;
+import nl.intercommit.basicjspws.controllers.*;
+import static nl.intercommit.basicjspws.ControllerUtil.getRemoteLocation;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -131,42 +127,44 @@ public class AppServlet extends HttpServlet {
 	/**
 	 * Looks up the controller for the "requestedUrl" (set by {@link AppFilter}) and executes the found controller.
 	 * If the controller returns a non-null String, a jsp-page is displayed.
+	 * <br>IOExceptions from the request and response objects should bubble up and NOT be catched, 
+	 * see also http://stackoverflow.com/questions/4300513/best-practice-response-getoutputstream 
 	 */
 	@Override
 	protected void doPost(final HttpServletRequest request, final HttpServletResponse response) throws ServletException, IOException {
 		
 		Controller handler = requestControllers.get((String)request.getAttribute("requestedUrl"));
 		if (handler == null) {
-			response.getWriter().write("Cannot find controller for URL " + request.getAttribute("requestedUrl"));
-			log.warn("No controller available for URL " + request.getAttribute("requestedUrl"));
+			response.sendError(404, "No controller found for "  + request.getAttribute("requestedUrl"));
+			log.warn(getRemoteLocation(request) + " No controller available for URL " + request.getAttribute("requestedUrl"));
 			return;
 		}
 		String viewName = null;
 		try {
 			viewName = handler.handleRequest(request, response);
 		} catch (Exception e) {
-			log.error("Controller " + handler.getClass().getName() + " failed to handle request properly.", e);
-			ControllerUtil.sendError(response, 500, "Cannot process request for URL " + request.getAttribute("requestedUrl") + ": " + e);
+			// Runtime exception from controller, e.g. IndexOutOfBoundsExcpetion.
+			log.error(getRemoteLocation(request) + " Controller " + handler.getClass().getName() + " failed to handle request properly.", e);
+			response.sendError(500, "Cannot process request for URL " + request.getAttribute("requestedUrl") + ": " + e);
 			return;
 		} catch (Throwable t) {
-			log.error("Server barfed while executing controller " + handler.getClass().getName(), t);
-			ControllerUtil.sendError(response, 500, "Server having trouble processing request for URL " + request.getAttribute("requestedUrl") + ": " + t);
+			// Really bad, e.g. OutOfMemoryError or StackOverflowError.
+			log.error(getRemoteLocation(request) + " Server barfed while executing controller " + handler.getClass().getName(), t);
+			response.sendError(500, "Server having trouble processing request for URL " + request.getAttribute("requestedUrl") + ": " + t);
 			return;
 		}
 		if (isEmpty(viewName)) {
-			//response.getWriter().write("Controller did not return a page for for URL " + request.getAttribute("requestedUrl"));
-			//log.warn("Controller " + handler.getClass().getName() + " did not return a view-page for URL " + request.getAttribute("requestedUrl"));
-			log.debug("doPost done.");
+			if (log.isTraceEnabled()) log.trace(getRemoteLocation(request) + " doPost done.");
 			return;
 		}
 		RequestDispatcher view = request.getRequestDispatcher(viewName);
 		if (view == null) {
-			log.warn("Controller " + handler.getClass().getName() + " returned view page " + viewName +", but the page does not exist.");
-			ControllerUtil.sendError(response, 404, "Could not find page " + viewName);
+			log.warn(getRemoteLocation(request) + " Controller " + handler.getClass().getName() + " returned view page " + viewName +", but the page does not exist.");
+			response.sendError(404, "Could not find page " + viewName);
 			return;
 		}
 		view.forward(request, response);
-		log.debug("doPost done for {}", viewName);
+		if (log.isTraceEnabled()) log.trace(getRemoteLocation(request) + " doPost done for " + viewName);
 	}
 	
 	@Override

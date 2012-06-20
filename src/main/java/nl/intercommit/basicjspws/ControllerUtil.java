@@ -25,6 +25,7 @@ import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.URLDecoder;
 import java.util.Arrays;
+import java.util.Enumeration;
 import java.util.Map;
 import java.util.Properties;
 
@@ -51,19 +52,46 @@ public class ControllerUtil {
 
 	private ControllerUtil() {}
 	
+	/**
+	 * Description of remote location between []. If used in log-statements, 
+	 * it is best to cache this value in a local String. 
+	 * @return [RemoteIP:port] from request.
+	 */
+	public static String getRemoteLocation(final HttpServletRequest request) {
+
+		return "[" + request.getRemoteAddr() + ":" + request.getRemotePort() + "]";
+	}
+	
+	/**
+	 * Logs in debug-mode the headers, parameters and query-string of the request. 
+	 * @param log Logger to use.
+	 * @param request The request to log details about.
+	 */
 	public static void logRequestDetails(final Logger log, final HttpServletRequest request) {
 		
 		if (!log.isDebugEnabled()) return;
-		StringBuilder sb = new StringBuilder(request.getMethod());
-		sb.append(" request details with content-length set to ").append(request.getContentLength()).append(":");
+		StringBuilder sb = new StringBuilder(128);
+		sb.append(getRemoteLocation(request)).append(" ");
+		sb.append(request.getMethod()).append(" request details:");
+		@SuppressWarnings("unchecked")
+		Enumeration<String> headerNames = request.getHeaderNames();
+		if (headerNames == null || !headerNames.hasMoreElements()) {
+			sb.append("\nNo headers.");
+		} else {
+			while (headerNames.hasMoreElements()) {
+				String hname = headerNames.nextElement();
+				String hvalue = request.getHeader(hname);
+				if (hvalue != null) {
+					sb.append("\nHeader ").append(hname).append(": ").append(hvalue);
+				}
+			}
+		}
 		@SuppressWarnings("unchecked")
 		Map<String, String[]> params = request.getParameterMap();
 		int numberOfParams = params.keySet().size(); 
 		if (numberOfParams == 0) {
-			sb.append("\nNo parameters");
+			sb.append("\nNo parameters.");
 		} else { 
-			sb.append(numberOfParams == 1 ? "\nThere is " : "\nThere are ").append(numberOfParams)
-			.append(numberOfParams == 1 ? " parameter:" : " parameters:");
 			for(String paramName: params.keySet()) {
 				sb.append("\nParam ").append(paramName).append(": ").append(Arrays.toString(params.get(paramName)));
 			}
@@ -78,6 +106,11 @@ public class ControllerUtil {
 		log.debug(sb.toString());
 	}
 	
+	/**
+	 * Tries to read the contents from the Reader of the request.
+	 * @param request the (post) request.
+	 * @return null (failed to get any contents) or an non-empty String.
+	 */
 	public static String getRequestContent(final HttpServletRequest request) {
 		
 		boolean haveSomething = false;
@@ -123,6 +156,10 @@ public class ControllerUtil {
 		return (v == null || v.isEmpty() ? null : v);
 	}
 	
+	/** 
+	 * Sends the errorCode with the erroMsg.
+	 * @return always null.
+	 */
 	public static String sendError(final HttpServletResponse response, final int errorCode, final String errorMsg) {
 		try {
 			response.sendError(errorCode, errorMsg);
@@ -132,6 +169,10 @@ public class ControllerUtil {
 		return null;
 	}
 
+	/**
+	 * Sends a redirect.
+	 * @return always null.
+	 */
 	public static String sendRedirect(final HttpServletResponse response, final String location) {
 		try {
 			response.sendRedirect(location);
@@ -236,27 +277,46 @@ public class ControllerUtil {
 		return null;
 	}
 	
+	/** Gets a session and then the session's servlet context. */
 	public static ServletContext getServletContext(final HttpServletRequest request) {
 		return getSession(request).getServletContext();
 	}
 	
+	/**
+	 * @return The properties from {@link AppInit}
+	 */
 	public static Properties getAppProps() {
 		return AppInit.appInstance.appProps;
 	}
 	
+	/**
+	 * @return The default encoding alias from {@link AppInit}
+	 */
 	public static String getDefaultEncoding() {
 		return AppInit.appInstance.defaultEncoding;
 	}
 
+	/**
+	 * @return The AppStats from {@link AppInit}
+	 */
 	public static AppStats getAppStats() {
 		return AppInit.appInstance.appStats;
 	}
 
+	/**
+	 * @return The "requestedUrl" attribute set by the MainFilter.
+	 */
 	public static String getRequestedUrl(final HttpServletRequest request) {
 		return (String)request.getAttribute("requestedUrl");
 	}
 	
+	/**
+	 * @return True if o is null or o as string is empty after trimming.
+	 */
 	public static boolean isEmpty(final Object o) { return (o == null || o.toString().trim().isEmpty()); };
-	/** Returns true is s is null or empty (after trimming). */
+
+	/**
+	 * @return true if s is null or empty after trimming.
+	 */
 	public static boolean isEmpty(final String s) { return (s == null || s.trim().isEmpty()); };
 }

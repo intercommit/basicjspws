@@ -43,8 +43,8 @@ public interface Controller {
 	
 	/** 
 	 * Called by {@link AppServlet} to handle a request.
-	 * <br>IOExceptions from the request and response objects should bubble up and NOT be catched, 
-	 * see also http://stackoverflow.com/questions/4300513/best-practice-response-getoutputstream 
+	 * Any {@link Throwable} from this method is catched by the {@link AppServlet}
+	 * in which case {@link AppServlet} will send a 500 "internal server error" response.
 	 * @return null (response has been handled by controller) or the jsp-page fileName to display.
 	 */
 	String handleRequest(HttpServletRequest request, HttpServletResponse response);
