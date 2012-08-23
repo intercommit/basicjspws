@@ -277,7 +277,18 @@ public class ControllerUtil {
 		return null;
 	}
 	
-	/** Gets a session and then the session's servlet context. */
+	/** 
+	 * Returns the servlet context with which this webapp was started.
+	 * See also {@link #getServletContext(HttpServletRequest)}. 
+	 */
+	public static ServletContext getServletContext() {
+		return AppInit.appInstance.sc;
+	}
+	
+	/** 
+	 * Gets a session and then the session's servlet context.
+	 * To get the servlet context without creating a session, use {@link #getServletContext()}. 
+	 */
 	public static ServletContext getServletContext(final HttpServletRequest request) {
 		return getSession(request).getServletContext();
 	}

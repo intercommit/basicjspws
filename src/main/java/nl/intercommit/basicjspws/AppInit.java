@@ -21,6 +21,7 @@ package nl.intercommit.basicjspws;
 import java.nio.charset.Charset;
 import java.util.Properties;
 
+import javax.servlet.ServletContext;
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 
@@ -65,6 +66,8 @@ public abstract class AppInit implements ServletContextListener {
 	public AppStats appStats;
 	/** The default encoding used to send responses. Used by {@link ControllerUtil}. */
 	public String defaultEncoding;
+	/** The servlet context that this listener uses to register global webapp attributes. */ 
+	public ServletContext sc;
 
 	/** The app-name is used in jsp-pages to show the name of this application. Stored in ServletContext as appName. */
 	protected abstract String getAppName();
@@ -89,6 +92,7 @@ public abstract class AppInit implements ServletContextListener {
 	/**
 	 * Initializes the application:
 	 * <br> - sets {@link #appInstance}
+	 * <br> - sets {@link #sc}
 	 * <br> - calls {@link #setHomeDir()}
 	 * <br> - registers in ServletContext appName, appBaseName, appVersion and appHomeDir
 	 * <br> - calls {@link LogbackUtil#initLogging(String, String)}
@@ -103,18 +107,19 @@ public abstract class AppInit implements ServletContextListener {
 	public void contextInitialized(final ServletContextEvent sce) {
 		
 		appInstance = this;
+		sc = sce.getServletContext();
 		appName = getAppName();
 		baseName = getBaseName();
 		setHomeDir();
-		sce.getServletContext().setAttribute("appName", appName);
-		sce.getServletContext().setAttribute("appBaseName", baseName);
-		sce.getServletContext().setAttribute("appVersion", getAppVersion());
-		sce.getServletContext().setAttribute("appHomeDir", appHomeDir); 
+		sc.setAttribute("appName", appName);
+		sc.setAttribute("appBaseName", baseName);
+		sc.setAttribute("appVersion", getAppVersion());
+		sc.setAttribute("appHomeDir", appHomeDir); 
 		LogbackUtil.initLogging(appHomeDir, baseName + "-logback.xml");
 		SysPropsUtil.logSysProps(log, true, true);
 		appStats = new AppStats();
 		appProps = getAppProps(sce);
-		sce.getServletContext().setAttribute("appEnv", getAppEnv()); 
+		sc.setAttribute("appEnv", getAppEnv()); 
 		try {
 			defaultEncoding = appProps.getProperty(baseName + ".default.encoding", "UTF-8");
 			Charset.forName(defaultEncoding);
@@ -143,13 +148,15 @@ public abstract class AppInit implements ServletContextListener {
 	}
 	
 	/**
-	 * Closes the logger (calls {@link LogbackUtil#getLoggerContext()}.stop()).
+	 * Closes the logger (calls {@link LogbackUtil#getLoggerContext()}.stop())
+	 * and sets {@link #sc} to null.
 	 * Overload to shutdown additional services when application is stopped/undeployed.
 	 */
 	@Override
 	public void contextDestroyed(final ServletContextEvent sce) {
 
 		LogbackUtil.getLoggerContext().stop();
+		sc = null;
 	}
 	
 	public static boolean isEmpty(final String s) { return (s == null || s.trim().isEmpty()); }
