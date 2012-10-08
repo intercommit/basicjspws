@@ -18,7 +18,11 @@
 */
 package nl.intercommit.basicjspws;
 
+import java.lang.ref.Reference;
+import java.lang.reflect.Field;
 import java.nio.charset.Charset;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
 
 import javax.servlet.ServletContext;
@@ -151,6 +155,7 @@ public abstract class AppInit implements ServletContextListener {
 	 * Closes the logger (calls {@link LogbackUtil#getLoggerContext()}.stop())
 	 * and sets {@link #sc} to null.
 	 * Overload to shutdown additional services when application is stopped/undeployed.
+	 * <br>Call {@link AppInit#clearThreadLocals(List)} if needed.
 	 */
 	@Override
 	public void contextDestroyed(final ServletContextEvent sce) {
@@ -159,5 +164,97 @@ public abstract class AppInit implements ServletContextListener {
 		sc = null;
 	}
 	
+	/**
+	 * Calls {@link #clearThreadLocals(List)} with the one threadLocal.
+	 */
+	protected void clearThreadLocal(ThreadLocal<?> threadLocal) {
+		clearThreadLocals(Arrays.asList(new ThreadLocal<?>[] { threadLocal }));
+	}
+	
+	/**
+	 * Clears (nullifies) all thread-local instances from all threads.
+	 * This prevents a severe log-statement from Tomcat about memory leakage through used thread-locals.
+	 * Note that Tomcat 7.0.6 can clear these leaks itself, see
+	 * https://issues.apache.org/bugzilla/show_bug.cgi?id=49159
+	 * <br>Copied from<br>
+	 * http://svn.apache.org/repos/asf/tomcat/tc7.0.x/tags/TOMCAT_7_0_8/java/org/apache/catalina/loader/WebappClassLoader.java
+	 * @param threadLocals A list of static ThreadLocal variables that are used as thread-locals in this web-app.
+	 */
+	protected void clearThreadLocals(List<ThreadLocal<?>> threadLocals) {
+		
+		Thread[] threads = getThreads();
+		try {
+			// Make the fields in the Thread class that store ThreadLocals accessible
+			Field threadLocalsField = Thread.class.getDeclaredField("threadLocals");
+			threadLocalsField.setAccessible(true);
+			Field inheritableThreadLocalsField = Thread.class.getDeclaredField("inheritableThreadLocals");
+			inheritableThreadLocalsField.setAccessible(true);
+			// Make the underlying array of ThreadLoad.ThreadLocalMap.Entry objects accessible
+			Class<?> tlmClass = Class.forName("java.lang.ThreadLocal$ThreadLocalMap");
+			Field tableField = tlmClass.getDeclaredField("table");
+			tableField.setAccessible(true);
+
+			for (int i = 0; i < threads.length; i++) {
+				Object threadLocalMap;
+				if (threads[i] != null) {
+					// Clear the first map
+					threadLocalMap = threadLocalsField.get(threads[i]);
+					clearThreadLocals(threadLocals, threadLocalMap, tableField);
+					// Clear the second map
+					threadLocalMap = inheritableThreadLocalsField.get(threads[i]);
+					clearThreadLocals(threadLocals, threadLocalMap, tableField);
+				}
+			}
+		} catch (Exception e) {
+			log.warn("Failed to clear thread-local variables.", e);
+		}       
+	}
+	
+	/**
+	 * Get the set of current threads as an array.
+	 */
+	private Thread[] getThreads() {
+
+		// Get the current thread group 
+		ThreadGroup tg = Thread.currentThread( ).getThreadGroup( );
+		// Find the root thread group
+		while (tg.getParent() != null) {
+			tg = tg.getParent();
+		}
+		int threadCountGuess = tg.activeCount() + 50;
+		Thread[] threads = new Thread[threadCountGuess];
+		int threadCountActual = tg.enumerate(threads);
+		// Make sure we don't miss any threads
+		while (threadCountActual == threadCountGuess) {
+			threadCountGuess *=2;
+			threads = new Thread[threadCountGuess];
+			// Note tg.enumerate(Thread[]) silently ignores any threads that
+			// can't fit into the array 
+			threadCountActual = tg.enumerate(threads);
+		}
+		return threads;
+	}
+
+	private void clearThreadLocals(List<ThreadLocal<?>> threadLocals, Object map, Field internalTableField) 
+			throws IllegalAccessException, NoSuchFieldException {
+
+		if (map == null) return;
+		Object[] table = (Object[]) internalTableField.get(map);
+		if (table == null) return;
+		int count = 0;
+		for (int j =0; j < table.length; j++) {
+			if (table[j] == null) continue;
+			// Check the key
+			Object key = ((Reference<?>) table[j]).get();
+			if (threadLocals.contains(key)) {
+				count++;
+				table[j] = null;
+			}
+		}
+		if (count > 0) {
+			log.debug("Removed " + count + " thread-local instances.");
+		}
+	}
+
 	public static boolean isEmpty(final String s) { return (s == null || s.trim().isEmpty()); }
 }
