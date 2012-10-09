@@ -31,6 +31,9 @@ public class SysPropsUtil {
 	private SysPropsUtil() {}
 
 	public static final String lf = System.getProperty("line.separator");
+	
+	/** Set to true to disable logging of system (environment) properties by {@link #logSysProps(org.slf4j.Logger, boolean, boolean)}. */
+	public static boolean logNothing;
 
 	/**
 	 * Shows system properties (from {@link System#getProperties()}) and system environment properties (from {@link System#getenv()}) in log.
@@ -40,7 +43,7 @@ public class SysPropsUtil {
 	 */
 	public static void logSysProps(final org.slf4j.Logger log, final boolean includeEnv, final boolean debug) {
 
-		if (debug && !log.isDebugEnabled()) return;
+		if (logNothing || (debug && !log.isDebugEnabled())) return;
 		if (includeEnv) {
 			if (debug) {
 				log.debug("System environment properties: {}", getSystemEnv());
